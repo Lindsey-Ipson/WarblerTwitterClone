@@ -1,7 +1,7 @@
 import os
 
 from flask import Flask, render_template, request, flash, redirect, session, g, url_for
-from flask_debugtoolbar import DebugToolbarExtension
+# from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
 
 from forms import UserAddForm, LoginForm, MessageForm, EditProfileForm
@@ -28,7 +28,8 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', "it's a secret")
 #just added:
 app.config['DEBUG'] = True
 
-toolbar = DebugToolbarExtension(app)
+# just did 7/4
+# toolbar = DebugToolbarExtension(app)
 
 connect_db(app)
 
@@ -309,13 +310,6 @@ def show_likes(user_id):
     return render_template('users/likes.html', user=user, likes=user.likes)
 
 
-# ///////////////////////////BOOKMARK//////////////////////////////////
-# ///////////////////////////BOOKMARK//////////////////////////////////
-# ///////////////////////////BOOKMARK//////////////////////////////////
-# ///////////////////////////BOOKMARK//////////////////////////////////
-# ///////////////////////////BOOKMARK//////////////////////////////////
-
-
 ##############################################################################
 # Messages routes:
 
@@ -358,7 +352,11 @@ def messages_destroy(message_id):
         flash("Access unauthorized.", "danger")
         return redirect("/")
 
-    msg = Message.query.get(message_id)
+    msg = Message.query.get_or_404(message_id)
+    if msg.user_id != g.user.id:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+    
     db.session.delete(msg)
     db.session.commit()
 
