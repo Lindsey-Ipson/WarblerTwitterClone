@@ -94,20 +94,22 @@ class User(db.Model):
         nullable=False,
     )
 
-    messages = db.relationship('Message')
+    messages = db.relationship('Message', lazy='subquery')
 
     followers = db.relationship(
         "User",
         secondary="follows",
         primaryjoin=(Follows.user_being_followed_id == id),
-        secondaryjoin=(Follows.user_following_id == id)
+        secondaryjoin=(Follows.user_following_id == id),
+        overlaps="followers"
     )
 
     following = db.relationship(
         "User",
         secondary="follows",
         primaryjoin=(Follows.user_following_id == id),
-        secondaryjoin=(Follows.user_being_followed_id == id)
+        secondaryjoin=(Follows.user_being_followed_id == id),
+        overlaps="followers"
     )
 
     likes = db.relationship(
@@ -197,7 +199,9 @@ class Message(db.Model):
         nullable=False,
     )
 
-    user = db.relationship('User')
+    user = db.relationship('User',
+                           overlaps="messages"
+                           )
 
 
 def connect_db(app):

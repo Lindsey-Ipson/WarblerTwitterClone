@@ -72,6 +72,7 @@ class UserModelTestCase(TestCase):
     def tearDown(self):
         res = super().tearDown()
         db.session.rollback()
+        db.drop_all()
         return res
 
 
