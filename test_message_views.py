@@ -43,30 +43,16 @@ class MessageViewTestCase(TestCase):
     def setUp(self):
         """Create test client, add sample data."""
 
-        with app.app_context():
-            print("drop all")
-            db.drop_all()
-            print("create all")
-            db.create_all()
-
-        print("user delete")
         User.query.delete()
-        print("message delete")
         Message.query.delete()
 
-        print("test_client")
         self.client = app.test_client()
 
-        print("signup")
-        self.testuser = User.signup(username="TestUser1",
-                                    email="TestUser1@test.com",
-                                    password="Test1Password",
+        self.testuser = User.signup(username="testuser",
+                                    email="test@test.com",
+                                    password="testuser",
                                     image_url=None)
-        
-        self.testuser_id = 1212
-        self.testuser.id = self.testuser_id
 
-        print("commit")
         db.session.commit()
 
 
@@ -85,7 +71,7 @@ class MessageViewTestCase(TestCase):
             resp = c.post("/messages/new", data={"text": "test message for test_add_message"})
 
             # Make sure it redirects
-            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(resp.status_code, 302)
 
             msg = Message.query.one()
             self.assertEqual(msg.text, "test message for test_add_message")
@@ -171,6 +157,7 @@ class MessageViewTestCase(TestCase):
                 sess[CURR_USER_KEY] = 76543
 
             resp = c.post("/messages/1234/delete", follow_redirects=True)
+
             self.assertEqual(resp.status_code, 200)
             self.assertIn("Access unauthorized", str(resp.data))
 
