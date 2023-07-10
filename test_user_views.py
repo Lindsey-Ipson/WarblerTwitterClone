@@ -1,25 +1,21 @@
-"""Message View tests."""
+"""User View tests."""
 
 # run these tests like:
-#
-#    FLASK_ENV=production python -m unittest test_message_views.py
-
+#    FLASK_ENV=production python -m unittest test_user_views.py
 
 import os
 from unittest import TestCase
 
-from models import db, connect_db, Message, User
+from models import db, connect_db, Message, User, Likes, Follows
+from bs4 import BeautifulSoup
 
 # BEFORE we import our app, let's set an environmental variable
 # to use a different database for tests (we need to do this
 # before we import our app, since that will have already
 # connected to the database
-
 os.environ['DATABASE_URL'] = "postgresql:///warbler-test"
 
-
 # Now we can import app
-
 from app import app, CURR_USER_KEY
 
 app.app_context().push()
@@ -27,208 +23,270 @@ app.app_context().push()
 # Create our tables (we do this here, so we only create the tables
 # once for all tests --- in each test, we'll delete the data
 # and create fresh new clean test data
-
 db.create_all()
 
 # Don't have WTForms use CSRF at all, since it's a pain to test
-
 app.config['WTF_CSRF_ENABLED'] = False
 
 # Make Flask errors be real errors, not HTML pages with error info
 app.config['TESTING'] = True
 
-# This is a bit of hack, but don't use Flask DebugToolbar
+# Don't use Flask DebugToolbar
 app.config['DEBUG_TB_HOSTS'] = ['dont-show-debug-toolbar']
 
 
-class MessageViewTestCase(TestCase):
-    """Test views for messages."""
+class UserViewTestCase(TestCase):
+    """Test views for users."""
 
     def setUp(self):
         """Create test client, add sample data."""
 
-        User.query.delete()
-        Message.query.delete()
+        db.drop_all()
+        db.create_all()
 
         self.client = app.test_client()
 
-        self.testuser = User.signup(username="testuser",
-                                    email="test@test.com",
-                                    password="testuser",
+        self.u1 = User.signup(username="test_user_1",
+                                    email="test_user_1@email.com",
+                                    password="password",
                                     image_url=None)
+        self.u1_id = 1111
+        self.u1.id = self.u1_id
+
+        self.u2 = User.signup("test_user_2", "test_user_2@email.com", "password", None)
+        self.u2_id = 2222
+        self.u2.id = self.u2_id
+        self.u3 = User.signup("test_user_3", "test_user_3@email.com", "password", None)
+        self.u3_id = 3333
+        self.u3.id = self.u3_id
+        self.u4 = User.signup("test_user_4", "test_user_4@email.com", "password", None)
+        self.u5 = User.signup("test_user_5", "test_user_5@email.com", "password", None)
 
         db.session.commit()
 
 
-    def test_add_message(self):
-        """Can use add a message?"""
+    def tearDown(self):
+        resp = super().tearDown()
+        db.session.rollback()
+        db.drop_all()
+        return resp
 
-        # Since we need to change the session to mimic logging in,
-        # we need to use the changing-session trick:
 
+    def test_show_list_users(self):
         with self.client as c:
-            with c.session_transaction() as sess:
-                sess[CURR_USER_KEY] = self.testuser.id
+            resp = c.get("/users")
 
-            # Now, that session setting is saved, so we can have
-            # the rest of ours test
+            self.assertIn("@test_user_1", str(resp.data))
+            self.assertIn("@test_user_2", str(resp.data))
+            self.assertIn("@test_user_3", str(resp.data))
+            self.assertIn("@test_user_4", str(resp.data))
+            self.assertIn("@test_user_5", str(resp.data))
 
-            resp = c.post("/messages/new", data={"text": "Hello"})
 
-            # Make sure it redirects
-            self.assertEqual(resp.status_code, 302)
-            msg = Message.query.one()
-            self.assertEqual(msg.text, "Hello")
-
-    
-    def test_add_message_valid(self):
-        """Can use add a message?"""
-
-        # Since we need to change the session to mimic logging in,
-        # we need to use the changing-session trick:
-
+    def test_search_users(self):
         with self.client as c:
-            with c.session_transaction() as sess:
-                sess[CURR_USER_KEY] = self.testuser.id
+            resp = c.get("/users?q=test_user_1")
 
-            # Now, that session setting is saved, so we can have
-            # the rest of ours test
+            self.assertIn("@test_user_1", str(resp.data))          
 
-            resp = c.post("/messages/new", data={"text": "Hello"}, follow_redirects=True
-            )
+            self.assertNotIn("@test_user_2", str(resp.data))
+            self.assertNotIn("@test_user_3", str(resp.data))
+            self.assertNotIn("@test_user_4", str(resp.data))
+            self.assertNotIn("@test_user_5", str(resp.data))  
 
-            # Make sure it redirects
+
+    def test_show_user(self):
+        with self.client as c:
+            resp = c.get(f"/users/{self.u1_id}")
+
             self.assertEqual(resp.status_code, 200)
 
-            msg = Message.query.one()
-            self.assertEqual(msg.text, "Hello")
+            self.assertIn("@test_user_1", str(resp.data))
 
 
-    def test_add_msg_not_logged_in(self):
-        """When logged out, is user prohibited from adding messages?"""
+    def setup_likes(self):
+        m1 = Message(text="Test msg 1 for setup_likes", user_id=self.u1_id)
+        m2 = Message(text="Test msg 2 for setup_likes", user_id=self.u1_id)
+        m3 = Message(id=2468, text="Test msg 3 for setup_likes", user_id=self.u2_id)
+        db.session.add_all([m1, m2, m3])
+        db.session.commit()
+
+        l1 = Likes(user_id=self.u1_id, message_id=2468)
+
+        db.session.add(l1)
+        db.session.commit()
+
+
+    def test_show_user_with_likes(self):
+        self.setup_likes()
 
         with self.client as c:
-            resp = c.post('/messages/new', data={'text': 'New message'}, follow_redirects=True)
+            resp = c.get(f"/users/{self.u1_id}")
 
-            # print('STATUS CODE', resp.status_code)
-            # print('RESP.DATA', str(resp.data))
             self.assertEqual(resp.status_code, 200)
-            self.assertIn("Access unauthorized", str(resp.data))
 
-    
-    def test_add_msg_invalid_user(self):
+            self.assertIn("@test_user_1", str(resp.data))
+            soup = BeautifulSoup(str(resp.data), 'html.parser')
+            found = soup.find_all("li", {"class": "stat"})
+            self.assertEqual(len(found), 4)
 
-        with self.client as c:
-            with c.session_transaction() as sess:
-                sess[CURR_USER_KEY] = 1111111111111111 # user does not exist
+            # test for a count of 2 messages
+            self.assertIn("2", found[0].text)
 
-            resp = c.post("/messages/new", data={"text": "New message"},follow_redirects=True)
-            self.assertEqual(resp.status_code, 200)
-            self.assertIn("Access unauthorized", str(resp.data))
+            # Test for a count of 0 followers
+            self.assertIn("0", found[1].text)
+
+            # Test for a count of 0 following
+            self.assertIn("0", found[2].text)
+
+            # Test for a count of 1 like
+            self.assertIn("1", found[3].text)
 
 
-# //////////////////////bookmark//////////////////////////////
-
-    def test_delete_msg_valid(self):
-        
-        m = Message(
-            id=2345,
-            text="Test message for test_delete_msg",
-            user_id=self.testuser.id
-        )
+    def test_add_like(self):
+        m = Message(id=46810, text="Test msg 1 for  test_add_like", user_id=self.u2_id)
         db.session.add(m)
         db.session.commit()
 
+        with self.client as c:
+            with c.session_transaction() as sess:
+                sess[CURR_USER_KEY] = self.u1_id
+
+            resp = c.post("/users/toggle_like/46810", follow_redirects=True)
+            self.assertEqual(resp.status_code, 200)
+
+            likes = Likes.query.filter(Likes.message_id==46810).all()
+            self.assertEqual(len(likes), 1)
+            self.assertEqual(likes[0].user_id, self.u1_id)
+
+
+    def test_remove_like(self):
+        self.setup_likes()
+
+        m = Message.query.filter(Message.text=="Test msg 3 for setup_likes").one()
+        self.assertIsNotNone(m)
+        self.assertNotEqual(m.user_id, self.u1_id)
+
+        l = Likes.query.filter(
+            Likes.user_id==self.u1_id and Likes.message_id==m.id
+        ).one()
+
+        # Now we are sure that test_user_1 likes the message "Test msg 3 for setup_likes"
+        self.assertIsNotNone(l)
+
+        with self.client as c:
+            with c.session_transaction() as sess:
+                sess[CURR_USER_KEY] = self.u1_id
+
+            resp = c.post(f"/users/toggle_like/{m.id}", follow_redirects=True)
+            self.assertEqual(resp.status_code, 200)
+
+            likes = Likes.query.filter(Likes.message_id==m.id).all()
+            # the like has been deleted
+            self.assertEqual(len(likes), 0)
+
+
+    def test_unauthenticated_like(self):
+        self.setup_likes()
+
+        m = Message.query.filter(Message.text=="Test msg 3 for setup_likes").one()
         self.assertIsNotNone(m)
 
+        like_count = Likes.query.count()
+
+        with self.client as c:
+            resp = c.post(f"/users/toggle_like/{m.id}", follow_redirects=True)
+            self.assertEqual(resp.status_code, 200)
+
+            self.assertIn("Access unauthorized", str(resp.data))
+
+            # The number of likes has not changed since making the request
+            self.assertEqual(like_count, Likes.query.count())
+
+
+    def setup_followers(self):
+        f1 = Follows(user_being_followed_id=self.u2_id, user_following_id=self.u1_id)
+        f2 = Follows(user_being_followed_id=self.u3_id, user_following_id=self.u1_id)
+        f3 = Follows(user_being_followed_id=self.u1_id, user_following_id=self.u2_id)
+
+        db.session.add_all([f1,f2,f3])
+        db.session.commit()
+
+
+    def test_show_user_with_follows(self):
+
+        self.setup_followers()
+
+        with self.client as c:
+            resp = c.get(f"/users/{self.u1_id}")
+
+            self.assertEqual(resp.status_code, 200)
+
+            self.assertIn("@test_user_1", str(resp.data))
+            soup = BeautifulSoup(str(resp.data), 'html.parser')
+            found = soup.find_all("li", {"class": "stat"})
+            self.assertEqual(len(found), 4)
+
+            # test for a count of 0 messages
+            self.assertIn("0", found[0].text)
+
+            # Test for a count of 2 following
+            self.assertIn("2", found[1].text)
+
+            # Test for a count of 1 follower
+            self.assertIn("1", found[2].text)
+
+            # Test for a count of 0 likes
+            self.assertIn("0", found[3].text)
+
+
+    def test_show_following(self):
+        self.setup_followers()
+
         with self.client as c:
             with c.session_transaction() as sess:
-                sess[CURR_USER_KEY] = self.testuser.id
+                sess[CURR_USER_KEY] = self.u1_id
 
-            resp = c.post("/messages/2345/delete") #, # follow_redirects=True)
-            self.assertEqual(resp.status_code, 302)
+            resp = c.get(f"/users/{self.u1_id}/following")
 
-            m = Message.query.get(2345)
-            self.assertIsNone(m)
+            self.assertEqual(resp.status_code, 200)
+            self.assertIn("@test_user_2", str(resp.data))
+            self.assertIn("@test_user_3", str(resp.data))
+            self.assertNotIn("@test_user_4", str(resp.data))
+            self.assertNotIn("@test_user_5", str(resp.data))
 
 
-    def test_delete_msg_not_logged_in(self):
-        """When you’re logged out, are you prohibited from deleting messages?"""
+    def test_show_followers_valid(self):
+        self.setup_followers()
 
         with self.client as c:
-            resp = c.post('/messages/new', data={'text': 'New message'}, follow_redirects=True)
+            with c.session_transaction() as sess:
+                sess[CURR_USER_KEY] = self.u1_id
 
-            # print('STATUS CODE', resp.status_code)
-            # print('RESP.DATA', str(resp.data))
+            resp = c.get(f"/users/{self.u1_id}/followers")
+
+            self.assertIn("@test_user_2", str(resp.data))
+            self.assertNotIn("@test_user_3", str(resp.data))
+            self.assertNotIn("@test_user_4", str(resp.data))
+            self.assertNotIn("@test_user_5", str(resp.data))
+
+
+    def test_unauthorized_following_page_access(self):
+        self.setup_followers()
+        with self.client as c:
+
+            resp = c.get(f"/users/{self.u1_id}/following", follow_redirects=True)
+
             self.assertEqual(resp.status_code, 200)
+            self.assertNotIn("@test_user_2", str(resp.data))
             self.assertIn("Access unauthorized", str(resp.data))
 
 
-    def test_delete_msg_other_user(self):
-        """When you’re logged in, are you prohibiting from deleting a message as another user?"""
-
-        # A second user that will try to delete the message
-        u = User.signup(username="unauthorized-user",
-                        email="unauthorized-user@test.com",
-                        password="password",
-                        image_url=None)
-        u.id = 76543
-
-        #Message is owned by testuser
-        m = Message(
-            id=1234,
-            text="test message for test_delete_msg_other_user",
-            user_id=self.testuser.id
-        )
-        db.session.add_all([u, m])
-        db.session.commit()
-
+    def test_unauthorized_followers_page_access(self):
+        self.setup_followers()
         with self.client as c:
-            with c.session_transaction() as sess:
-                sess[CURR_USER_KEY] = 76543
 
-            resp = c.post("/messages/1234/delete", follow_redirects=True)
-            print('resp.data---------------->>>>>>>>>>>>>>>>>>>>.', str(resp.data))
+            resp = c.get(f"/users/{self.u1_id}/followers", follow_redirects=True)
             self.assertEqual(resp.status_code, 200)
+            self.assertNotIn("@test_user_2", str(resp.data))
             self.assertIn("Access unauthorized", str(resp.data))
-
-            m = Message.query.get(1234)
-
-
-    def test_show_msg_valid(self):
-
-        m = Message(
-            id=1234,
-            text="Message from test test_show_message",
-            user_id=self.testuser.id
-        )
-
-        db.session.add(m)
-        db.session.commit()
-
-        with self.client as c:
-            with c.session_transaction() as sess:
-                sess[CURR_USER_KEY] = self.testuser.id
-
-            m = Message.query.get(1234)
-
-            resp = c.get(f'/messages/{m.id}')
-
-            # print('resp.data---------------->>>>>>>>>>>>>>>>>>>>.', str(resp.data))
-
-            self.assertEqual(resp.status_code, 200)
-            self.assertIn(m.text, str(resp.data))
-
-
-    def test_show_msg_invalid(self):
-        with self.client as c:
-            with c.session_transaction() as sess:
-                sess[CURR_USER_KEY] = self.testuser.id
-            
-            resp = c.get('/messages/8888888') # message doesn't exist
-
-            # print('CURR_USER_KEY---------------->>>>>>>>>>>>>>>>>>>>.', sess[CURR_USER_KEY], self.testuser.id)
-            # print('resp.data---------------->>>>>>>>>>>>>>>>>>>>.', str(resp.data))
-
-            self.assertEqual(resp.status_code, 404)
-

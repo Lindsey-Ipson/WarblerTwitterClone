@@ -13,8 +13,6 @@ import bcrypt
 CURR_USER_KEY = "curr_user"
 
 app = Flask(__name__)
-# just added
-# app.app_context().push()
 
 # Get DB_URI from environ variable (useful for production/testing) or,
 # if not set there, use development local db.
@@ -25,21 +23,16 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ECHO'] = False
 # app.config['DEBUG_TB_INTERCEPT_REDIRECTS'] = True
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', "it's a secret")
-#just added:
+
 app.config['DEBUG'] = True
 
 toolbar = DebugToolbarExtension(app)
 
 connect_db(app)
 
-# just added
-# with app.app_context():
-#     db.create_all()
-
 
 ##############################################################################
 # User signup/login/logout
-
 
 @app.before_request
 def add_user_to_g():
@@ -54,7 +47,6 @@ def add_user_to_g():
 
 def do_login(user):
     """Log in user."""
-    # pdb.set_trace()
 
     session[CURR_USER_KEY] = user.id
 
@@ -79,8 +71,6 @@ def signup():
     """
 
     form = UserAddForm()
-
-    # pdb.set_trace()
 
     # does what form.validate_on_submit would, but bypasses extra_validators argument, which was throwing errors
     if form.is_submitted() and form.validate():
@@ -132,7 +122,6 @@ def logout():
     do_logout()
     flash("You've been logged out.")
     return redirect('/login')
-
 
 
 ##############################################################################
@@ -231,7 +220,6 @@ def stop_following(follow_id):
 def profile():
     """Update profile for current user."""
 
-    # IMPLEMENT THIS
     if not g.user:
         flash("Access unauthorized.", "danger")
         return redirect("/")
@@ -241,12 +229,11 @@ def profile():
 
     if form.is_submitted() and form.validate():
         if User.authenticate(user.username, form.password.data):
-        # if bcrypt.check_password_hash(user.password, form.password.data):
             form.populate_obj(user)
             db.session.commit()
             return redirect(url_for('users_show', user_id=user.id))
         else:
-            flash("Wrong password, check yourself before you wreck yourself.", "danger")
+            flash("Password incorrect.", "danger")
             return render_template('users/edit.html', form=form, user_id=user.id)
     return render_template('users/edit.html', form=form, user_id=user.id)
 
@@ -297,23 +284,14 @@ def toggle_like(msg_id):
 @app.route('/users/<int:user_id>/likes')
 def show_likes(user_id):
     """Show a user's likes"""
+
     if not g.user:
         flash("Access unauthorized.", "danger")
         return redirect("/")
 
-    # throw error
-    # pdb.set_trace()
-
     user = User.query.get_or_404(user_id)
 
     return render_template('users/likes.html', user=user, likes=user.likes)
-
-
-# ///////////////////////////BOOKMARK//////////////////////////////////
-# ///////////////////////////BOOKMARK//////////////////////////////////
-# ///////////////////////////BOOKMARK//////////////////////////////////
-# ///////////////////////////BOOKMARK//////////////////////////////////
-# ///////////////////////////BOOKMARK//////////////////////////////////
 
 
 ##############################################################################
@@ -350,21 +328,6 @@ def messages_show(message_id):
     return render_template('messages/show.html', message=msg)
 
 
-# @app.route('/messages/<int:message_id>/delete', methods=["POST"])
-# def messages_destroy(message_id):
-#     """Delete a message."""
-
-#     if not g.user:
-#         flash("Access unauthorized.", "danger")
-#         return redirect("/")
-
-#     msg = Message.query.get(message_id)
-#     db.session.delete(msg)
-#     db.session.commit()
-
-#     return redirect(f"/users/{g.user.id}")
-
-
 @app.route('/messages/<int:message_id>/delete', methods=["POST"])
 def messages_destroy(message_id):
     """Delete a message."""
@@ -387,7 +350,6 @@ def messages_destroy(message_id):
 
 ##############################################################################
 # Homepage and error pages
-
 
 @app.route('/')
 def homepage():
@@ -418,7 +380,7 @@ def homepage():
 
 ##############################################################################
 # Turn off all caching in Flask
-#   (useful for dev; in production, this kind of stuff is typically
+#   (useful for dev; in production, typically
 #   handled elsewhere)
 #
 # https://stackoverflow.com/questions/34066804/disabling-caching-in-flask
@@ -432,8 +394,3 @@ def add_header(req):
     req.headers["Expires"] = "0"
     req.headers['Cache-Control'] = 'public, max-age=0'
     return req
-
-
-
-
-

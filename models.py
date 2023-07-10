@@ -155,7 +155,7 @@ class User(db.Model):
     def authenticate(cls, username, password):
         """Find user with `username` and `password`.
 
-        This is a class method (call it on the class, not an individual user.)
+        This is a class method (called on the class, not an individual user.)
         It searches for a user whose password hash matches this password
         and, if it finds such a user, returns that user object.
 
@@ -207,7 +207,7 @@ class Message(db.Model):
 def connect_db(app):
     """Connect this database to provided Flask app.
 
-    You should call this in your Flask app.
+    Should call this in Flask app.
     """
 
     db.app = app

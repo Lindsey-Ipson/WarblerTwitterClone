@@ -1,8 +1,7 @@
 """Message View tests."""
 
 # run these tests like:
-#
-#    FLASK_ENV=production python -m unittest test_message_views.py
+# FLASK_ENV=production python -m unittest test_message_views.py
 
 
 import os
@@ -17,9 +16,7 @@ from models import db, connect_db, Message, User
 
 os.environ['DATABASE_URL'] = "postgresql:///warbler-test"
 
-
 # Now we can import app
-
 from app import app, CURR_USER_KEY
 
 app.app_context().push()
@@ -32,13 +29,12 @@ db.drop_all()
 db.create_all()
 
 # Don't have WTForms use CSRF at all, since it's a pain to test
-
 app.config['WTF_CSRF_ENABLED'] = False
 
 # Make Flask errors be real errors, not HTML pages with error info
 app.config['TESTING'] = True
 
-# This is a bit of hack, but don't use Flask DebugToolbar
+# Don't use Flask DebugToolbar
 app.config['DEBUG_TB_HOSTS'] = ['dont-show-debug-toolbar']
 
 
@@ -60,12 +56,12 @@ class MessageViewTestCase(TestCase):
 
         db.session.commit()
 
+
     def test_add_message(self):
         """Can use add a message?"""
 
         # Since we need to change the session to mimic logging in,
         # we need to use the changing-session trick:
-
         with self.client as c:
             with c.session_transaction() as sess:
                 sess[CURR_USER_KEY] = self.testuser.id
@@ -73,61 +69,37 @@ class MessageViewTestCase(TestCase):
             # Now, that session setting is saved, so we can have
             # the rest of ours test
 
-            resp = c.post("/messages/new", data={"text": "Hello"})
+            resp = c.post("/messages/new", data={"text": "test message for test_add_message"})
 
             # Make sure it redirects
             self.assertEqual(resp.status_code, 302)
-            msg = Message.query.one()
-            self.assertEqual(msg.text, "Hello")
-
-    
-    def test_add_message_valid(self):
-        """Can use add a message?"""
-
-        # Since we need to change the session to mimic logging in,
-        # we need to use the changing-session trick:
-
-        with self.client as c:
-            with c.session_transaction() as sess:
-                sess[CURR_USER_KEY] = self.testuser.id
-
-            # Now, that session setting is saved, so we can have
-            # the rest of ours test
-
-            resp = c.post("/messages/new", data={"text": "Hello"}, follow_redirects=True
-            )
-
-            # Make sure it redirects
-            self.assertEqual(resp.status_code, 200)
 
             msg = Message.query.one()
-            self.assertEqual(msg.text, "Hello")
+            self.assertEqual(msg.text, "test message for test_add_message")
 
 
     def test_add_msg_not_logged_in(self):
         """When logged out, is user prohibited from adding messages?"""
 
         with self.client as c:
-            resp = c.post('/messages/new', data={'text': 'New message'}, follow_redirects=True)
+            resp = c.post('/messages/new', data={'text': 'test message for test_add_msg_not_logged_in'}, follow_redirects=True)
 
-            # print('STATUS CODE', resp.status_code)
-            # print('RESP.DATA', str(resp.data))
             self.assertEqual(resp.status_code, 200)
             self.assertIn("Access unauthorized", str(resp.data))
 
     
     def test_add_msg_invalid_user(self):
+        """With invalid CURR_USER_KEY, is user prohibited from adding messages?"""
 
         with self.client as c:
             with c.session_transaction() as sess:
                 sess[CURR_USER_KEY] = 1111111111111111 # user does not exist
 
-            resp = c.post("/messages/new", data={"text": "New message"},follow_redirects=True)
+            resp = c.post("/messages/new", data={"text": "test message for test_add_msg_invalid_user"},follow_redirects=True)
+
             self.assertEqual(resp.status_code, 200)
             self.assertIn("Access unauthorized", str(resp.data))
 
-
-# //////////////////////bookmark//////////////////////////////
 
     def test_delete_msg_valid(self):
         
@@ -145,7 +117,7 @@ class MessageViewTestCase(TestCase):
             with c.session_transaction() as sess:
                 sess[CURR_USER_KEY] = self.testuser.id
 
-            resp = c.post("/messages/2345/delete") #, # follow_redirects=True)
+            resp = c.post("/messages/2345/delete")
             self.assertEqual(resp.status_code, 302)
 
             m = Message.query.get(2345)
@@ -156,10 +128,8 @@ class MessageViewTestCase(TestCase):
         """When you’re logged out, are you prohibited from deleting messages?"""
 
         with self.client as c:
-            resp = c.post('/messages/new', data={'text': 'New message'}, follow_redirects=True)
+            resp = c.post('/messages/new', data={'text': 'test message for test_delete_msg_not_logged_in'}, follow_redirects=True)
 
-            # print('STATUS CODE', resp.status_code)
-            # print('RESP.DATA', str(resp.data))
             self.assertEqual(resp.status_code, 200)
             self.assertIn("Access unauthorized", str(resp.data))
 
@@ -174,7 +144,7 @@ class MessageViewTestCase(TestCase):
                         image_url=None)
         u.id = 76543
 
-        #Message is owned by testuser
+        # Message is owned by testuser
         m = Message(
             id=1234,
             text="test message for test_delete_msg_other_user",
@@ -188,7 +158,7 @@ class MessageViewTestCase(TestCase):
                 sess[CURR_USER_KEY] = 76543
 
             resp = c.post("/messages/1234/delete", follow_redirects=True)
-            print('resp.data---------------->>>>>>>>>>>>>>>>>>>>.', str(resp.data))
+
             self.assertEqual(resp.status_code, 200)
             self.assertIn("Access unauthorized", str(resp.data))
 
@@ -214,21 +184,17 @@ class MessageViewTestCase(TestCase):
 
             resp = c.get(f'/messages/{m.id}')
 
-            # print('resp.data---------------->>>>>>>>>>>>>>>>>>>>.', str(resp.data))
-
             self.assertEqual(resp.status_code, 200)
             self.assertIn(m.text, str(resp.data))
 
 
     def test_show_msg_invalid(self):
+        
         with self.client as c:
             with c.session_transaction() as sess:
                 sess[CURR_USER_KEY] = self.testuser.id
             
             resp = c.get('/messages/8888888') # message doesn't exist
-
-            # print('CURR_USER_KEY---------------->>>>>>>>>>>>>>>>>>>>.', sess[CURR_USER_KEY], self.testuser.id)
-            # print('resp.data---------------->>>>>>>>>>>>>>>>>>>>.', str(resp.data))
 
             self.assertEqual(resp.status_code, 404)
 

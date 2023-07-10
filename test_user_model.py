@@ -1,10 +1,5 @@
 """User model tests."""
 
-# run these tests like:
-#
-#    python -m unittest test_user_model.py
-
-
 import os
 from unittest import TestCase
 from sqlalchemy import exc
@@ -15,28 +10,18 @@ from models import db, User, Message, Follows
 # to use a different database for tests (we need to do this
 # before we import our app, since that will have already
 # connected to the database
-
 os.environ['DATABASE_URL'] = "postgresql:///warbler-test"
 
-
 # Now we can import app
-
 from app import app
 
 # Create our tables (we do this here, so we only create the tables
 # once for all tests --- in each test, we'll delete the data
 # and create fresh new clean test data
 
-
-# db.create_all()
 app.app_context().push()
 
-# with app.app_context():
 db.create_all()
-
-# app.app_context().push()
-# python -m unittest test_user_model.UserModelTestCase.test_user_model
-
 
 
 class UserModelTestCase(TestCase):
@@ -150,9 +135,7 @@ class UserModelTestCase(TestCase):
         self.assertFalse(self.u1.is_followed_by(self.u2))
 
 
-
 #________________________________Signup Tests________________________________
-
 
     def test_user_signup_valid(self):
         """Test that a new user can be signed up given valid credentials"""
